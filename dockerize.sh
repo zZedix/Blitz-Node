@@ -41,37 +41,19 @@ run_with_privileges() {
     fi
 }
 
+apt_update_ran=false
+
 ensure_apt_packages() {
     local packages=("$@")
     if command -v apt-get >/dev/null 2>&1; then
-        run_with_privileges apt-get update
+        if [[ $apt_update_ran = false ]]; then
+            run_with_privileges apt-get update
+            apt_update_ran=true
+        fi
         run_with_privileges apt-get install -y "${packages[@]}"
     else
         echo "Automatic dependency installation is only implemented for apt-based systems." >&2
         exit 1
-    fi
-}
-
-ensure_docker() {
-    if command -v "$DOCKER" >/dev/null 2>&1; then
-        if $DOCKER --version >/dev/null 2>&1; then
-            :
-        else
-            echo "Detected docker command but unable to run it." >&2
-            exit 1
-        fi
-    else
-        echo "Docker not found. Installing docker.io and docker compose plugin..."
-        ensure_apt_packages docker.io docker-compose-plugin
-    fi
-
-    if ! $DOCKER_COMPOSE version >/dev/null 2>&1; then
-        echo "docker compose plugin missing. Installing..."
-        ensure_apt_packages docker-compose-plugin
-    fi
-
-    if command -v systemctl >/dev/null 2>&1; then
-        run_with_privileges systemctl enable --now docker
     fi
 }
 
@@ -84,9 +66,96 @@ ensure_command() {
     fi
 }
 
-check_requirements() {
-    ensure_docker
+install_docker_via_script() {
+    echo "Installing Docker using the official convenience script..."
+    run_with_privileges sh -c "curl -fsSL https://get.docker.com | sh"
+}
+
+ensure_docker() {
+    if ! command -v "$DOCKER" >/dev/null 2>&1; then
+        ensure_command "curl" "curl"
+        install_docker_via_script
+    elif ! $DOCKER --version >/dev/null 2>&1; then
+        echo "Detected docker command but unable to execute it." >&2
+        exit 1
+    fi
+
+    if command -v systemctl >/dev/null 2>&1; then
+        run_with_privileges systemctl enable --now docker
+    fi
+
+    local target_user="${SUDO_USER:-$USER}"
+    if [[ -n "${target_user:-}" && "$target_user" != "root" ]]; then
+        if command -v id >/dev/null 2>&1 && ! id -nG "$target_user" | grep -qw docker; then
+            echo "Adding $target_user to docker group..."
+            run_with_privileges usermod -aG docker "$target_user"
+            echo "Please log out and log back in for the group change to take effect."
+        fi
+    fi
+}
+
+install_compose_plugin() {
+    if command -v apt-get >/dev/null 2>&1; then
+        echo "Attempting to install docker compose plugin via apt..."
+        if run_with_privileges apt-get install -y docker-compose-plugin; then
+            DOCKER_COMPOSE="docker compose"
+            return 0
+        fi
+    fi
+    return 1
+}
+
+install_compose_standalone() {
+    echo "Installing standalone docker-compose binary..."
+    local arch
+    arch=$(uname -m)
+    case "$arch" in
+        x86_64|amd64) arch="x86_64" ;;
+        aarch64|arm64) arch="aarch64" ;;
+        armv7l) arch="armv7" ;;
+        *) echo "Unsupported architecture for docker-compose binary: $arch" >&2; return 1 ;;
+    esac
+
+    local version="v2.24.7"
+    local url="https://github.com/docker/compose/releases/download/${version}/docker-compose-linux-${arch}"
+    run_with_privileges curl -fsSL "$url" -o /usr/local/bin/docker-compose
+    run_with_privileges chmod +x /usr/local/bin/docker-compose
+    DOCKER_COMPOSE="docker-compose"
+}
+
+ensure_compose() {
+    if $DOCKER_COMPOSE version >/dev/null 2>&1; then
+        return
+    fi
+
+    if command -v docker compose >/dev/null 2>&1; then
+        DOCKER_COMPOSE="docker compose"
+        return
+    fi
+
+    if command -v docker-compose >/dev/null 2>&1; then
+        DOCKER_COMPOSE="docker-compose"
+        return
+    fi
+
     ensure_command "curl" "curl"
+
+    if install_compose_plugin; then
+        return
+    fi
+
+    if install_compose_standalone; then
+        return
+    fi
+
+    echo "Failed to install Docker Compose." >&2
+    exit 1
+}
+
+check_requirements() {
+    ensure_command "curl" "curl"
+    ensure_docker
+    ensure_compose
     ensure_command "jq" "jq"
     ensure_command "openssl" "openssl"
     ensure_command "uuidgen" "uuid-runtime"
