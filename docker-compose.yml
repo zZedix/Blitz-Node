@@ -1,0 +1,50 @@
+services:
+  hysteria:
+    build:
+      context: .
+      target: hysteria
+      args:
+        HYSTERIA_VERSION: ${HYSTERIA_VERSION:-v2.4.1}
+    image: blitz-hysteria:latest
+    restart: unless-stopped
+    volumes:
+      - ./hysteria-config:/etc/hysteria
+    ports:
+      - "${HYSTERIA_PORT:-1239}:${HYSTERIA_PORT:-1239}/udp"
+
+  auth:
+    build:
+      context: .
+      target: app
+    image: blitz-node:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      AUTH_HOST: 0.0.0.0
+      AUTH_PORT: ${AUTH_PORT:-28262}
+    ports:
+      - "${AUTH_PORT:-28262}:28262"
+    volumes:
+      - ./hysteria-config:/etc/hysteria:ro
+    depends_on:
+      - hysteria
+
+  traffic:
+    build:
+      context: .
+      target: app
+    image: blitz-node:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: traffic.py
+    environment:
+      HYSTERIA_CONFIG_FILE: ${HYSTERIA_CONFIG_FILE:-/etc/hysteria/config.json}
+      SYNC_INTERVAL: ${SYNC_INTERVAL:-60}
+      HYSTERIA_API_BASE: ${HYSTERIA_API_BASE:-http://hysteria:25413}
+    depends_on:
+      - hysteria
+    volumes:
+      - ./hysteria-config:/etc/hysteria:ro
+

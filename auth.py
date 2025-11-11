@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 
 PANEL_API_URL = os.getenv("PANEL_API_URL")
 PANEL_API_KEY = os.getenv("PANEL_API_KEY")
+AUTH_HOST = os.getenv("AUTH_HOST", "0.0.0.0")
+AUTH_PORT = int(os.getenv("AUTH_PORT", "28262"))
 users_cache = {}
 
 async def fetch_users_from_panel():
@@ -102,4 +104,4 @@ async def init_app():
 
 if __name__ == "__main__":
     app = asyncio.run(init_app())
-    web.run_app(app, host="127.0.0.1", port=28262)
+    web.run_app(app, host=AUTH_HOST, port=AUTH_PORT)

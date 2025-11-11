@@ -11,12 +11,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-CONFIG_FILE = '/etc/hysteria/config.json'
+CONFIG_FILE = os.getenv("HYSTERIA_CONFIG_FILE", "/etc/hysteria/config.json")
 PANEL_API_URL = os.getenv("PANEL_API_URL")
 PANEL_TRAFFIC_URL = os.getenv("PANEL_TRAFFIC_URL")
 PANEL_API_KEY = os.getenv("PANEL_API_KEY")
-HYSTERIA_API_BASE = "http://127.0.0.1:25413"
-SYNC_INTERVAL = int(os.getenv("SYNC_INTERVAL"))
+HYSTERIA_API_BASE = os.getenv("HYSTERIA_API_BASE", "http://127.0.0.1:25413")
+SYNC_INTERVAL = int(os.getenv("SYNC_INTERVAL", "60"))
 
 def load_config():
     with open(CONFIG_FILE, 'r') as f:
