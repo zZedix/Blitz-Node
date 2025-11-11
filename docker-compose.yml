@@ -4,7 +4,7 @@ services:
       context: .
       target: hysteria
       args:
-        HYSTERIA_VERSION: ${HYSTERIA_VERSION:-v2.4.1}
+        HYSTERIA_VERSION: ${HYSTERIA_VERSION:-latest}
     image: blitz-hysteria:latest
     restart: unless-stopped
     volumes:
