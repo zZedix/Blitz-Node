@@ -178,7 +178,7 @@ PANEL_API_URL=${panel_url%/}/api/v1/users/
 PANEL_TRAFFIC_URL=${panel_url%/}/api/v1/config/ip/nodestraffic
 PANEL_API_KEY=${panel_key}
 
-HYSTERIA_VERSION=v2.4.1
+HYSTERIA_VERSION=latest
 HYSTERIA_PORT=${port}
 HYSTERIA_SNI=${sni}
 
@@ -260,7 +260,7 @@ services:
       context: .
       target: hysteria
       args:
-        HYSTERIA_VERSION: ${HYSTERIA_VERSION:-v2.4.1}
+        HYSTERIA_VERSION: ${HYSTERIA_VERSION:-latest}
     image: blitz-hysteria:latest
     restart: unless-stopped
     env_file:
