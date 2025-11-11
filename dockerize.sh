@@ -30,27 +30,66 @@ Examples:
 EOF
 }
 
-require_command() {
-    local cmd="$1"
-    if ! command -v "$cmd" >/dev/null 2>&1; then
-        echo "Required command '$cmd' is not available." >&2
+run_with_privileges() {
+    if [[ $EUID -eq 0 ]]; then
+        "$@"
+    elif command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+    else
+        echo "This operation requires elevated privileges: $*" >&2
         exit 1
     fi
 }
 
-check_requirements() {
-    require_command "$DOCKER"
+ensure_apt_packages() {
+    local packages=("$@")
+    if command -v apt-get >/dev/null 2>&1; then
+        run_with_privileges apt-get update
+        run_with_privileges apt-get install -y "${packages[@]}"
+    else
+        echo "Automatic dependency installation is only implemented for apt-based systems." >&2
+        exit 1
+    fi
+}
+
+ensure_docker() {
+    if command -v "$DOCKER" >/dev/null 2>&1; then
+        if $DOCKER --version >/dev/null 2>&1; then
+            :
+        else
+            echo "Detected docker command but unable to run it." >&2
+            exit 1
+        fi
+    else
+        echo "Docker not found. Installing docker.io and docker compose plugin..."
+        ensure_apt_packages docker.io docker-compose-plugin
+    fi
+
     if ! $DOCKER_COMPOSE version >/dev/null 2>&1; then
-        echo "docker compose plugin is required but not available." >&2
-        exit 1
+        echo "docker compose plugin missing. Installing..."
+        ensure_apt_packages docker-compose-plugin
     fi
-    require_command "curl"
-    require_command "jq"
-    require_command "openssl"
-    if ! command -v uuidgen >/dev/null 2>&1; then
-        echo "uuidgen is required but not available. Install util-linux or uuid-runtime." >&2
-        exit 1
+
+    if command -v systemctl >/dev/null 2>&1; then
+        run_with_privileges systemctl enable --now docker
     fi
+}
+
+ensure_command() {
+    local cmd="$1"
+    local package="$2"
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        echo "Installing missing dependency: $package"
+        ensure_apt_packages "$package"
+    fi
+}
+
+check_requirements() {
+    ensure_docker
+    ensure_command "curl" "curl"
+    ensure_command "jq" "jq"
+    ensure_command "openssl" "openssl"
+    ensure_command "uuidgen" "uuid-runtime"
 }
 
 generate_env_file() {
