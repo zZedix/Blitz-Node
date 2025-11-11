@@ -24,17 +24,21 @@ ENTRYPOINT ["python"]
 CMD ["auth.py"]
 
 FROM alpine:3.20 AS hysteria
-ARG HYSTERIA_VERSION=v2.4.6
+ARG HYSTERIA_VERSION=latest
 ARG TARGETARCH
 RUN apk add --no-cache ca-certificates curl && \
     case "${TARGETARCH}" in \
         amd64) H_ARCH="amd64" ;; \
         arm64) H_ARCH="arm64" ;; \
-        arm/v7) H_ARCH="armv7" ;; \
-        armv7) H_ARCH="armv7" ;; \
+        arm/v7|armv7) H_ARCH="armv7" ;; \
         *) echo "Unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac && \
-    curl -fsSL -o /usr/local/bin/hysteria "https://github.com/apernet/hysteria/releases/download/${HYSTERIA_VERSION}/hysteria-linux-${H_ARCH}" && \
+    if [ "${HYSTERIA_VERSION}" = "latest" ]; then \
+        DOWNLOAD_URL="https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-${H_ARCH}"; \
+    else \
+        DOWNLOAD_URL="https://github.com/apernet/hysteria/releases/download/${HYSTERIA_VERSION}/hysteria-linux-${H_ARCH}"; \
+    fi && \
+    curl -fsSL -o /usr/local/bin/hysteria "${DOWNLOAD_URL}" && \
     chmod +x /usr/local/bin/hysteria
 
 WORKDIR /etc/hysteria
